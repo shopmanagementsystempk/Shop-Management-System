@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Navbar, Nav, Container, Button, Offcanvas } from 'react-bootstrap';
+import React, { useState, useEffect } from 'react';
+import { Navbar, Nav, Container, Button, Offcanvas, Collapse } from 'react-bootstrap';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -13,6 +13,45 @@ const MainNavbar = () => {
   const navigate = useNavigate();
   const [showSidebar, setShowSidebar] = useState(false);
   const location = useLocation();
+  
+  // Check if we're on an expenses page to auto-open the menu
+  const isExpensesPage = location.pathname === '/expenses' || location.pathname === '/add-expense' || location.pathname === '/expense-categories';
+  const [expensesOpen, setExpensesOpen] = useState(isExpensesPage);
+  const [expensesOpenMobile, setExpensesOpenMobile] = useState(isExpensesPage);
+
+  // Check if we're on an attendance page to auto-open the menu
+  const isAttendancePage = location.pathname === '/attendance' || location.pathname === '/mark-attendance' || location.pathname === '/attendance-report';
+  const [attendanceOpen, setAttendanceOpen] = useState(isAttendancePage);
+  const [attendanceOpenMobile, setAttendanceOpenMobile] = useState(isAttendancePage);
+
+  // Check if we're on an employees page to auto-open the menu
+  const isEmployeesPage = location.pathname === '/employees' || location.pathname === '/add-employee';
+  const [employeesOpen, setEmployeesOpen] = useState(isEmployeesPage);
+  const [employeesOpenMobile, setEmployeesOpenMobile] = useState(isEmployeesPage);
+
+  // Auto-open expenses menu when on expenses pages
+  useEffect(() => {
+    if (isExpensesPage) {
+      setExpensesOpen(true);
+      setExpensesOpenMobile(true);
+    }
+  }, [isExpensesPage]);
+
+  // Auto-open attendance menu when on attendance pages
+  useEffect(() => {
+    if (isAttendancePage) {
+      setAttendanceOpen(true);
+      setAttendanceOpenMobile(true);
+    }
+  }, [isAttendancePage]);
+
+  // Auto-open employees menu when on employees pages
+  useEffect(() => {
+    if (isEmployeesPage) {
+      setEmployeesOpen(true);
+      setEmployeesOpenMobile(true);
+    }
+  }, [isEmployeesPage]);
 
   const handleLogout = () => {
     logout()
@@ -108,6 +147,10 @@ const MainNavbar = () => {
     shopping_bag: {
       background: 'linear-gradient(135deg, #FF5F6D 0%, #FFC371 100%)',
       color: '#ffffff'
+    },
+    badge: {
+      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      color: '#ffffff'
     }
   };
 
@@ -129,6 +172,120 @@ const MainNavbar = () => {
       </span>
       <span className="sidebar-text">{label}</span>
     </Nav.Link>
+    );
+  };
+
+  const renderSubNavItem = (path, label, closeSidebar = false, indent = true) => {
+    return (
+      <Nav.Link
+        as={Link}
+        to={path}
+        className={`sidebar-link ${isActive(path) ? 'active' : ''} ${indent ? 'sidebar-sub-item' : ''}`}
+        onClick={() => {
+          if (closeSidebar) {
+            setShowSidebar(false);
+          }
+        }}
+      >
+        <span className="sidebar-text">{label}</span>
+      </Nav.Link>
+    );
+  };
+
+  const renderExpensesMenu = (closeSidebar = false, isMobile = false) => {
+    const isOpen = isMobile ? expensesOpenMobile : expensesOpen;
+    const setIsOpen = isMobile ? setExpensesOpenMobile : setExpensesOpen;
+    const iconStyle = googleIconPalette['payments'] || defaultGoogleIconStyle;
+    const isExpensesActive = isActive('/expenses') || isActive('/add-expense') || isActive('/expense-categories');
+
+    return (
+      <>
+        <div 
+          className={`sidebar-link ${isExpensesActive ? 'active' : ''}`}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span className="sidebar-icon" style={iconStyle}>
+            <span className="material-icons-outlined google-icon">payments</span>
+          </span>
+          <span className="sidebar-text">Expenses</span>
+          <i className={`bi ${isOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`} style={{ fontSize: '0.8rem' }}></i>
+        </div>
+        <Collapse in={isOpen}>
+          <div className="sidebar-submenu">
+            {!isStaff && (
+              renderSubNavItem('/add-expense', <Translate textKey="addExpense" fallback="Add Expense" />, closeSidebar)
+            )}
+            {renderSubNavItem('/expenses', <Translate textKey="viewExpenses" fallback="View Expenses" />, closeSidebar)}
+            {!isStaff && (
+              renderSubNavItem('/expense-categories', <Translate textKey="expenseCategories" fallback="Expense Categories" />, closeSidebar)
+            )}
+          </div>
+        </Collapse>
+      </>
+    );
+  };
+
+  const renderAttendanceMenu = (closeSidebar = false, isMobile = false) => {
+    const isOpen = isMobile ? attendanceOpenMobile : attendanceOpen;
+    const setIsOpen = isMobile ? setAttendanceOpenMobile : setAttendanceOpen;
+    const iconStyle = googleIconPalette['event_available'] || defaultGoogleIconStyle;
+    const isAttendanceActive = isActive('/attendance') || isActive('/mark-attendance') || isActive('/attendance-report');
+
+    return (
+      <>
+        <div 
+          className={`sidebar-link ${isAttendanceActive ? 'active' : ''}`}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span className="sidebar-icon" style={iconStyle}>
+            <span className="material-icons-outlined google-icon">event_available</span>
+          </span>
+          <span className="sidebar-text">Attendance</span>
+          <i className={`bi ${isOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`} style={{ fontSize: '0.8rem' }}></i>
+        </div>
+        <Collapse in={isOpen}>
+          <div className="sidebar-submenu">
+            {renderSubNavItem('/attendance', <Translate textKey="viewAttendance" />, closeSidebar)}
+            {renderSubNavItem('/mark-attendance', <Translate textKey="markAttendance" />, closeSidebar)}
+            {!isStaff && (
+              renderSubNavItem('/attendance-report', <Translate textKey="attendanceReport" />, closeSidebar)
+            )}
+          </div>
+        </Collapse>
+      </>
+    );
+  };
+
+  const renderEmployeesMenu = (closeSidebar = false, isMobile = false) => {
+    const isOpen = isMobile ? employeesOpenMobile : employeesOpen;
+    const setIsOpen = isMobile ? setEmployeesOpenMobile : setEmployeesOpen;
+    const iconStyle = googleIconPalette['groups'] || defaultGoogleIconStyle;
+    const isEmployeesActive = isActive('/employees') || isActive('/add-employee');
+
+    return (
+      <>
+        <div 
+          className={`sidebar-link ${isEmployeesActive ? 'active' : ''}`}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span className="sidebar-icon" style={iconStyle}>
+            <span className="material-icons-outlined google-icon">groups</span>
+          </span>
+          <span className="sidebar-text">Employees</span>
+          <i className={`bi ${isOpen ? 'bi-chevron-down' : 'bi-chevron-right'} ms-auto`} style={{ fontSize: '0.8rem' }}></i>
+        </div>
+        <Collapse in={isOpen}>
+          <div className="sidebar-submenu">
+            {renderSubNavItem('/employees', <Translate textKey="viewEmployees" />, closeSidebar)}
+            {!isStaff && (
+              renderSubNavItem('/add-employee', <Translate textKey="addEmployee" />, closeSidebar)
+            )}
+          </div>
+        </Collapse>
+      </>
     );
   };
 
@@ -185,35 +342,19 @@ const MainNavbar = () => {
                   </>
                 )}
                 {hasPermission('canViewEmployees') && (
-                  <>
-                    {renderNavItem('/employees', 'groups', <Translate textKey="viewEmployees" />, true)}
-                    {!isStaff && (
-                      renderNavItem('/add-employee', 'group_add', <Translate textKey="addEmployee" />, true)
-                    )}
-                  </>
+                  renderEmployeesMenu(true, true)
                 )}
                 {hasPermission('canManageExpenses') && (
-                  <>
-                    {renderNavItem('/expenses', 'payments', <Translate textKey="viewExpenses" fallback="View Expenses" />, true)}
-                    {!isStaff && (
-                      <>
-                        {renderNavItem('/add-expense', 'add_card', <Translate textKey="addExpense" fallback="Add Expense" />, true)}
-                        {renderNavItem('/expense-categories', 'category', <Translate textKey="expenseCategories" fallback="Expense Categories" />, true)}
-                      </>
-                    )}
-                  </>
+                  renderExpensesMenu(true, true)
                 )}
                 {hasPermission('canMarkAttendance') && (
-                  <>
-                    {renderNavItem('/attendance', 'event_available', <Translate textKey="viewAttendance" />, true)}
-                    {renderNavItem('/mark-attendance', 'how_to_reg', <Translate textKey="markAttendance" />, true)}
-                    {!isStaff && (
-                      renderNavItem('/attendance-report', 'assignment', <Translate textKey="attendanceReport" />, true)
-                    )}
-                  </>
+                  renderAttendanceMenu(true, true)
                 )}
                 {!isStaff && !isGuest && (
                   renderNavItem('/settings', 'settings', <Translate textKey="settings" />, true)
+                )}
+                {!isStaff && !isGuest && (
+                  renderNavItem('/shop-profile', 'badge', 'Shop Profile', true)
                 )}
                 {!isStaff && !isGuest && (
                   renderNavItem('/staff-management', 'admin_panel_settings', 'Staff Management', true)
@@ -273,35 +414,19 @@ const MainNavbar = () => {
                 </>
               )}
               {hasPermission('canViewEmployees') && (
-                <>
-                  {renderNavItem('/employees', 'groups', <Translate textKey="viewEmployees" />)}
-                  {!isStaff && (
-                    renderNavItem('/add-employee', 'group_add', <Translate textKey="addEmployee" />)
-                  )}
-                </>
+                renderEmployeesMenu(false, false)
               )}
               {hasPermission('canManageExpenses') && (
-                <>
-                  {renderNavItem('/expenses', 'payments', <Translate textKey="viewExpenses" fallback="View Expenses" />)}
-                  {!isStaff && (
-                    <>
-                      {renderNavItem('/add-expense', 'add_card', <Translate textKey="addExpense" fallback="Add Expense" />)}
-                      {renderNavItem('/expense-categories', 'category', <Translate textKey="expenseCategories" fallback="Expense Categories" />)}
-                    </>
-                  )}
-                </>
+                renderExpensesMenu(false, false)
               )}
               {hasPermission('canMarkAttendance') && (
-                <>
-                  {renderNavItem('/attendance', 'event_available', <Translate textKey="viewAttendance" />)}
-                  {renderNavItem('/mark-attendance', 'how_to_reg', <Translate textKey="markAttendance" />)}
-                  {!isStaff && (
-                    renderNavItem('/attendance-report', 'assignment', <Translate textKey="attendanceReport" />)
-                  )}
-                </>
+                renderAttendanceMenu(false, false)
               )}
               {!isStaff && !isGuest && (
                 renderNavItem('/settings', 'settings', <Translate textKey="settings" />)
+              )}
+              {!isStaff && !isGuest && (
+                renderNavItem('/shop-profile', 'badge', 'Shop Profile')
               )}
               {!isStaff && !isGuest && (
                 renderNavItem('/staff-management', 'admin_panel_settings', 'Staff Management')
