@@ -5,8 +5,19 @@ import PageHeader from '../components/PageHeader';
 import { useAuth } from '../contexts/AuthContext';
 import { createPurchaseOrder, getPurchaseOrders } from '../utils/purchaseUtils';
 import { formatDisplayDate } from '../utils/dateUtils';
+import { getShopStock } from '../utils/stockUtils';
 
-const defaultRow = { name: '', category: '', description: '', quantity: '', unit: 'units', costPrice: '', sellingPrice: '', expiryDate: '' };
+const defaultRow = {
+  sourceItemId: '',
+  name: '',
+  category: '',
+  description: '',
+  quantity: '',
+  unit: 'units',
+  costPrice: '',
+  sellingPrice: '',
+  expiryDate: ''
+};
 const createEmptyRow = () => ({ ...defaultRow });
 
 const formatCurrency = (value) => {
@@ -33,6 +44,8 @@ const PurchaseManagement = () => {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [stockItems, setStockItems] = useState([]);
+  const [stockLoading, setStockLoading] = useState(false);
 
   const totalCost = useMemo(() => {
     return rows.reduce((sum, row) => sum + calculateRowTotal(row), 0);
@@ -47,6 +60,15 @@ const PurchaseManagement = () => {
       .finally(() => setHistoryLoading(false));
   }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    setStockLoading(true);
+    getShopStock(currentUser.uid)
+      .then(setStockItems)
+      .catch(err => console.error('Failed to load stock items', err))
+      .finally(() => setStockLoading(false));
+  }, [currentUser]);
+
   const setRowValue = (index, key, value) => {
     setRows(prev => {
       const next = [...prev];
@@ -58,6 +80,37 @@ const PurchaseManagement = () => {
   const addRow = () => setRows(prev => [...prev, createEmptyRow()]);
   const removeRow = (index) => setRows(prev => prev.filter((_, idx) => idx !== index));
 
+  const handleSelectExistingProduct = (index, itemId) => {
+    setRows(prev => {
+      const next = [...prev];
+      const selectedItem = stockItems.find(item => item.id === itemId);
+
+      if (!selectedItem) {
+        next[index] = { ...next[index], sourceItemId: '' };
+        return next;
+      }
+
+      next[index] = {
+        ...next[index],
+        sourceItemId: itemId,
+        name: selectedItem.name || next[index].name,
+        category: selectedItem.category || next[index].category,
+        description: selectedItem.description || next[index].description,
+        unit: selectedItem.quantityUnit || next[index].unit || 'units',
+        costPrice:
+          selectedItem.costPrice !== undefined && selectedItem.costPrice !== null
+            ? selectedItem.costPrice
+            : next[index].costPrice,
+        sellingPrice:
+          selectedItem.price !== undefined && selectedItem.price !== null
+            ? selectedItem.price
+            : next[index].sellingPrice
+      };
+
+      return next;
+    });
+  };
+
   const validateRows = () => {
     const validRows = rows.filter(row => row.name.trim() && parseFloat(row.quantity) > 0);
     if (!validRows.length) {
@@ -65,6 +118,7 @@ const PurchaseManagement = () => {
       return null;
     }
     return validRows.map(row => ({
+      sourceItemId: row.sourceItemId || '',
       name: row.name.trim(),
       category: row.category.trim(),
       description: row.description.trim(),
@@ -329,6 +383,32 @@ const PurchaseManagement = () => {
                       <Row className="g-3">
                         <Col md={4}>
                           <Form.Group>
+                            <Form.Label>Existing Product</Form.Label>
+                            <Form.Select
+                              value={row.sourceItemId || ''}
+                              onChange={(e) => handleSelectExistingProduct(idx, e.target.value)}
+                              disabled={stockLoading || !stockItems.length}
+                            >
+                              <option value="">
+                                {stockLoading
+                                  ? 'Loading inventory...'
+                                  : 'Add as new product'}
+                              </option>
+                              {stockItems.map(item => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name}
+                                </option>
+                              ))}
+                            </Form.Select>
+                            <Form.Text className="text-muted">
+                              {stockItems.length
+                                ? 'Select to auto-fill item details'
+                                : 'No products in inventory yet'}
+                            </Form.Text>
+                          </Form.Group>
+                        </Col>
+                        <Col md={4}>
+                          <Form.Group>
                             <Form.Label>Item Name*</Form.Label>
                             <Form.Control value={row.name} onChange={(e) => setRowValue(idx, 'name', e.target.value)} required />
                           </Form.Group>
@@ -339,7 +419,9 @@ const PurchaseManagement = () => {
                             <Form.Control value={row.category} onChange={(e) => setRowValue(idx, 'category', e.target.value)} />
                           </Form.Group>
                         </Col>
-                        <Col md={4}>
+                      </Row>
+                      <Row className="g-3 mt-1">
+                        <Col md={12}>
                           <Form.Group>
                             <Form.Label>Description</Form.Label>
                             <Form.Control value={row.description} onChange={(e) => setRowValue(idx, 'description', e.target.value)} />
