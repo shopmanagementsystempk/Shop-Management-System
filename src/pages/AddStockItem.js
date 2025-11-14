@@ -1,0 +1,291 @@
+import React, { useState } from 'react';
+import { Container, Form, Button, Row, Col, Card, Alert } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import MainNavbar from '../components/Navbar';
+import PageHeader from '../components/PageHeader';
+import { addStockItem as addStockItemToFirestore } from '../utils/stockUtils';
+
+const AddStockItem = () => {
+  const { currentUser } = useAuth();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState('');
+  const [price, setPrice] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [quantityUnit, setQuantityUnit] = useState('units'); // Default to units
+  const [costPrice, setCostPrice] = useState('');
+  const [supplier, setSupplier] = useState('');
+  const [sku, setSku] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  // Handle form submission
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    setError('');
+    setLoading(true);
+    
+    // Validation
+    if (!name.trim()) {
+      setError('Item name is required');
+      setLoading(false);
+      return;
+    }
+    
+    if (isNaN(parseFloat(price)) || parseFloat(price) < 0) {
+      setError('Price must be a valid number');
+      setLoading(false);
+      return;
+    }
+    
+    if (isNaN(parseFloat(quantity)) || parseFloat(quantity) < 0) {
+      setError('Quantity must be a valid number');
+      setLoading(false);
+      return;
+    }
+    
+    if (costPrice && (isNaN(parseFloat(costPrice)) || parseFloat(costPrice) < 0)) {
+      setError('Cost price must be a valid number');
+      setLoading(false);
+      return;
+    }
+    
+    // Create stock item data
+    const itemData = {
+      name: name.trim(),
+      description: description.trim(),
+      category: category.trim(),
+      price: parseFloat(price),
+      quantity: parseFloat(quantity), // Changed to parseFloat to support decimal values for kg
+      quantityUnit: quantityUnit, // Store the unit (kg or units)
+      costPrice: costPrice ? parseFloat(costPrice) : null,
+      supplier: supplier.trim(),
+      sku: sku.trim(),
+      expiryDate: expiryDate || null,
+      purchaseDate: purchaseDate || new Date().toISOString()
+    };
+    
+    // Save to Firestore
+    addStockItemToFirestore(currentUser.uid, itemData)
+      .then(() => {
+        navigate('/stock');
+      })
+      .catch(error => {
+        setError('Failed to add stock item: ' + error.message);
+        console.error(error);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  return (
+    <>
+      <MainNavbar />
+      <Container className="pos-content">
+        <PageHeader
+          title="Add New Stock Item"
+          icon="bi-bag-plus"
+          subtitle="Register fresh inventory, set pricing, and keep your catalog up to date."
+        >
+          <div className="hero-metrics__item">
+            <span className="hero-metrics__label">Default Unit</span>
+            <span className="hero-metrics__value">{quantityUnit.toUpperCase()}</span>
+          </div>
+          <div className="hero-metrics__item">
+            <span className="hero-metrics__label">Cost Price</span>
+            <span className="hero-metrics__value">{costPrice ? `RS ${costPrice}` : '—'}</span>
+          </div>
+          <div className="hero-metrics__item">
+            <span className="hero-metrics__label">Selling Price</span>
+            <span className="hero-metrics__value">{price ? `RS ${price}` : '—'}</span>
+          </div>
+          <div className="hero-metrics__item">
+            <span className="hero-metrics__label">Quantity</span>
+            <span className="hero-metrics__value">{quantity || '0'}</span>
+          </div>
+        </PageHeader>
+        <div className="page-header-actions">
+          <Button 
+            variant="outline-secondary" 
+            onClick={() => navigate('/stock')}
+          >
+            Back to Inventory
+          </Button>
+        </div>
+        
+        {error && <Alert variant="danger">{error}</Alert>}
+        
+        <Card>
+          <Card.Body>
+            <Form onSubmit={handleSubmit}>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Item Name*</Form.Label>
+                    <Form.Control
+                      type="text"
+                      required
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Category</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={category}
+                      onChange={(e) => setCategory(e.target.value)}
+                      placeholder="e.g. Electronics, Groceries, etc."
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+              
+              <Form.Group className="mb-3">
+                <Form.Label>Description</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={3}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Product details, specifications, etc."
+                />
+              </Form.Group>
+              
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Selling Price (RS)*</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Cost Price (RS)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={costPrice}
+                      onChange={(e) => setCostPrice(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Quantity*</Form.Label>
+                    <Row>
+                      <Col xs={7}>
+                        <Form.Control
+                          type="number"
+                          min="0"
+                          step={quantityUnit === 'kg' ? '0.01' : '1'} // Allow decimals for kg
+                          required
+                          value={quantity}
+                          onChange={(e) => setQuantity(e.target.value)}
+                        />
+                      </Col>
+                      <Col xs={5}>
+                        <Form.Select 
+                          value={quantityUnit}
+                          onChange={(e) => setQuantityUnit(e.target.value)}
+                        >
+                          <option value="units">Units</option>
+                          <option value="kg">KG</option>
+                        </Form.Select>
+                      </Col>
+                    </Row>
+                  </Form.Group>
+                </Col>
+              </Row>
+              
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Supplier</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={supplier}
+                      onChange={(e) => setSupplier(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>SKU/Barcode</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={sku}
+                      onChange={(e) => setSku(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Expiry Date (Optional)</Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={expiryDate || ''}
+                      onChange={(e) => setExpiryDate(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Purchase Date</Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={purchaseDate}
+                      onChange={(e) => setPurchaseDate(e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+              
+              <div className="d-flex mt-4">
+                <Button 
+                  variant="success" 
+                  type="submit" 
+                  disabled={loading}
+                  className="me-2"
+                >
+                  Add Item
+                </Button>
+                <Button 
+                  variant="outline-secondary" 
+                  onClick={() => navigate('/stock')}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </Form>
+          </Card.Body>
+        </Card>
+      </Container>
+    </>
+  );
+};
+
+export default AddStockItem; 
