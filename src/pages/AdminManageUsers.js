@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Container, Table, Card, Badge, Alert, Spinner, Button } from 'react-bootstrap';
+import { Container, Table, Card, Badge, Alert, Spinner, Button, Modal, Form, Row, Col } from 'react-bootstrap';
 import { useAdmin } from '../contexts/AdminContext';
 import AdminNavbar from '../components/AdminNavbar';
-import { db, auth } from '../firebase/config';
-import { getDoc, doc } from 'firebase/firestore';
-import { getAuth, listUsers } from 'firebase/auth';
 
 // Simple mock data for direct use
 const MOCK_USERS = [
@@ -46,12 +43,27 @@ const MOCK_USERS = [
   }
 ];
 
+const initialNewUserState = {
+  shopName: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  phoneNumber: '',
+  address: '',
+  status: 'approved'
+};
+
 const AdminManageUsers = () => {
-  const { getAllUsers, toggleUserFreeze } = useAdmin();
+  const { getAllUsers, toggleUserFreeze, createShopAccount } = useAdmin();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState({});
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newUserData, setNewUserData] = useState(initialNewUserState);
+  const [createModalError, setCreateModalError] = useState('');
+  const [createSuccess, setCreateSuccess] = useState('');
+  const [creatingUser, setCreatingUser] = useState(false);
 
   // Get status badge
   const getStatusBadge = (status) => {
@@ -153,13 +165,76 @@ const AdminManageUsers = () => {
     backgroundColor: '#f5f7fb'
   };
 
+  const handleCreateInputChange = (e) => {
+    const { name, value } = e.target;
+    setNewUserData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const openCreateModal = () => {
+    setCreateModalError('');
+    setNewUserData({ ...initialNewUserState });
+    setShowCreateModal(true);
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setCreateModalError('');
+    setNewUserData({ ...initialNewUserState });
+  };
+
+  const handleCreateUser = async (e) => {
+    e.preventDefault();
+    setCreateModalError('');
+    if (newUserData.password !== newUserData.confirmPassword) {
+      setCreateModalError('Passwords do not match');
+      return;
+    }
+
+    try {
+      setCreatingUser(true);
+      await createShopAccount({
+        shopName: newUserData.shopName.trim(),
+        email: newUserData.email.trim().toLowerCase(),
+        password: newUserData.password,
+        phoneNumber: newUserData.phoneNumber.trim(),
+        address: newUserData.address.trim(),
+        status: newUserData.status
+      });
+
+      setCreateSuccess('User account created successfully.');
+      closeCreateModal();
+      await fetchUsers();
+    } catch (createError) {
+      setCreateModalError(createError.message || 'Failed to create account. Please try again.');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
+  const renderCreateSuccessAlert = () =>
+    createSuccess ? (
+      <Alert variant="success" dismissible onClose={() => setCreateSuccess('')}>
+        {createSuccess}
+      </Alert>
+    ) : null;
+
   return (
     <>
       <AdminNavbar />
       <div className="d-none d-lg-block" style={contentStyle}>
         <Container fluid>
-          <h2 className="mb-4">Manage Users - Debug View</h2>
-          
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+            <div>
+              <h2 className="mb-1">Manage Users</h2>
+              <p className="text-muted mb-0">Approve, freeze, or create new shop accounts</p>
+            </div>
+            <Button variant="primary" onClick={openCreateModal}>
+              <i className="bi bi-plus-circle me-2"></i>
+              Create User
+            </Button>
+          </div>
+
+          {renderCreateSuccessAlert()}
           {error && <Alert variant="danger">{error}</Alert>}
           
           <Card className="border-0 shadow-sm">
@@ -234,8 +309,18 @@ const AdminManageUsers = () => {
       {/* Mobile view */}
       <div className="d-block d-lg-none" style={mobileContentStyle}>
         <Container fluid>
-          <h2 className="mb-4">Manage Users - Debug View</h2>
-          
+          <div className="d-flex flex-column gap-2 mb-4">
+            <div>
+              <h2 className="mb-1">Manage Users</h2>
+              <p className="text-muted mb-0">Administer shop accounts on the go</p>
+            </div>
+            <Button variant="primary" onClick={openCreateModal}>
+              <i className="bi bi-plus-circle me-2"></i>
+              Create User
+            </Button>
+          </div>
+
+          {renderCreateSuccessAlert()}
           {error && <Alert variant="danger">{error}</Alert>}
           
           <Card className="border-0 shadow-sm">
@@ -294,6 +379,132 @@ const AdminManageUsers = () => {
           </Card>
         </Container>
       </div>
+
+      <Modal show={showCreateModal} onHide={closeCreateModal} size="lg" centered>
+        <Form onSubmit={handleCreateUser}>
+          <Modal.Header closeButton>
+            <Modal.Title>Create New Shop Account</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {createModalError && <Alert variant="danger">{createModalError}</Alert>}
+            <Row className="g-3">
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Shop Name</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="shopName"
+                    value={newUserData.shopName}
+                    onChange={handleCreateInputChange}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Email</Form.Label>
+                  <Form.Control
+                    type="email"
+                    name="email"
+                    value={newUserData.email}
+                    onChange={handleCreateInputChange}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    name="password"
+                    value={newUserData.password}
+                    onChange={handleCreateInputChange}
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                  />
+                  <Form.Text className="text-muted">
+                    Must include uppercase, lowercase, number, and special character.
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Confirm Password</Form.Label>
+                  <Form.Control
+                    type="password"
+                    name="confirmPassword"
+                    value={newUserData.confirmPassword}
+                    onChange={handleCreateInputChange}
+                    autoComplete="new-password"
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Phone Number</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="phoneNumber"
+                    value={newUserData.phoneNumber}
+                    onChange={handleCreateInputChange}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label>Account Status</Form.Label>
+                  <Form.Select
+                    name="status"
+                    value={newUserData.status}
+                    onChange={handleCreateInputChange}
+                  >
+                    <option value="approved">Approved (Active)</option>
+                    <option value="pending">Pending Approval</option>
+                    <option value="frozen">Frozen</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={12}>
+                <Form.Group>
+                  <Form.Label>Address</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    name="address"
+                    value={newUserData.address}
+                    onChange={handleCreateInputChange}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeCreateModal}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={creatingUser}>
+              {creatingUser ? (
+                <>
+                  <Spinner
+                    as="span"
+                    animation="border"
+                    size="sm"
+                    role="status"
+                    aria-hidden="true"
+                    className="me-2"
+                  />
+                  Creating...
+                </>
+              ) : (
+                'Create Account'
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
     </>
   );
 };
