@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Container, Table, Button, Card, Form, InputGroup, Row, Col, Badge, Modal } from 'react-bootstrap';
+import { Container, Table, Button, Card, Form, InputGroup, Row, Col, Badge, Modal, Alert, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import MainNavbar from '../components/Navbar';
 import PageHeader from '../components/PageHeader';
 import { getShopStock, deleteStockItem } from '../utils/stockUtils';
+import { getInventoryCategories, addInventoryCategory, updateInventoryCategory, deleteInventoryCategory } from '../utils/categoryUtils';
 import './ViewStock.css'; // Import the custom CSS
 import { Translate, useTranslatedAttribute } from '../utils';
 import { formatDisplayDate } from '../utils/dateUtils';
@@ -23,6 +24,16 @@ const ViewStock = () => {
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [itemToPrintBarcode, setItemToPrintBarcode] = useState(null);
   const [printBarcodeData, setPrintBarcodeData] = useState(null);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [inventoryCategories, setInventoryCategories] = useState([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [newCategory, setNewCategory] = useState({ name: '', description: '' });
+  const [editCategory, setEditCategory] = useState({ id: '', name: '', description: '' });
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
+  const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [categoryError, setCategoryError] = useState('');
+  const [categorySuccess, setCategorySuccess] = useState('');
   const navigate = useNavigate();
   
   // Get translations for attributes
@@ -57,8 +68,23 @@ const ViewStock = () => {
     fetchStock();
   }, [fetchStock, currentUser, navigate]);
 
-  // Get unique categories for filter dropdown
-  const categories = [...new Set(stockItems.map(item => item.category))].filter(Boolean);
+  // Fetch inventory categories
+  const fetchCategories = useCallback(() => {
+    if (!activeShopId) return;
+    setCategoryLoading(true);
+    getInventoryCategories(activeShopId)
+      .then(setInventoryCategories)
+      .catch(err => console.error('Failed to load categories', err))
+      .finally(() => setCategoryLoading(false));
+  }, [activeShopId]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
+
+  // Get unique categories for filter dropdown (combine inventory categories with existing stock categories)
+  const stockCategories = [...new Set(stockItems.map(item => item.category))].filter(Boolean);
+  const allCategories = [...new Set([...inventoryCategories.map(cat => cat.name), ...stockCategories])].sort();
 
   // Handle search and filtering
   const filteredItems = stockItems
@@ -268,6 +294,85 @@ const ViewStock = () => {
     return 'success';
   };
 
+  // Category management handlers
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!activeShopId || !newCategory.name.trim()) {
+      setCategoryError('Category name is required');
+      return;
+    }
+    setCategoryError('');
+    setCategoryLoading(true);
+    try {
+      const categoryData = {
+        name: newCategory.name.trim(),
+        description: newCategory.description.trim(),
+        shopId: activeShopId
+      };
+      await addInventoryCategory(categoryData);
+      setCategorySuccess('Category added successfully');
+      setNewCategory({ name: '', description: '' });
+      fetchCategories();
+      setTimeout(() => setCategorySuccess(''), 3000);
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to add category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const handleEditCategory = (category) => {
+    setEditCategory({ id: category.id, name: category.name, description: category.description || '' });
+    setShowEditCategoryModal(true);
+  };
+
+  const handleUpdateCategory = async (e) => {
+    e.preventDefault();
+    if (!editCategory.id || !editCategory.name.trim()) {
+      setCategoryError('Category name is required');
+      return;
+    }
+    setCategoryError('');
+    setCategoryLoading(true);
+    try {
+      await updateInventoryCategory(editCategory.id, {
+        name: editCategory.name.trim(),
+        description: editCategory.description.trim()
+      });
+      setCategorySuccess('Category updated successfully');
+      setShowEditCategoryModal(false);
+      setEditCategory({ id: '', name: '', description: '' });
+      fetchCategories();
+      setTimeout(() => setCategorySuccess(''), 3000);
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to update category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = (category) => {
+    setCategoryToDelete(category);
+    setShowDeleteCategoryModal(true);
+  };
+
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
+    setCategoryLoading(true);
+    try {
+      await deleteInventoryCategory(categoryToDelete.id);
+      setCategorySuccess('Category deleted successfully');
+      setShowDeleteCategoryModal(false);
+      setCategoryToDelete(null);
+      fetchCategories();
+      setTimeout(() => setCategorySuccess(''), 3000);
+    } catch (err) {
+      setCategoryError(err.message || 'Failed to delete category');
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
   return (
     <>
       <style dangerouslySetInnerHTML={{
@@ -314,6 +419,13 @@ const ViewStock = () => {
             >
               <Translate textKey="addNewItem" />
             </Button>
+            <Button 
+              variant="outline-primary" 
+              onClick={() => setShowCategoryModal(true)}
+            >
+              <i className="bi bi-tags me-1"></i>
+              Manage Categories
+            </Button>
           </div>
         </div>
         
@@ -350,7 +462,7 @@ const ViewStock = () => {
                     onChange={(e) => setCategoryFilter(e.target.value)}
                   >
                     <option value=""><Translate textKey="allCategories" /></option>
-                    {categories.map((category, index) => (
+                    {allCategories.map((category, index) => (
                       <option key={index} value={category}>
                         {category}
                       </option>
@@ -524,6 +636,152 @@ const ViewStock = () => {
                   <Button variant="outline-primary" onClick={handlePrintBarcodePopup}>
                     Print (Popup)
                   </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Category Management Modal */}
+        <Modal show={showCategoryModal} onHide={() => setShowCategoryModal(false)} size="lg">
+          <Modal.Header closeButton>
+            <Modal.Title>Manage Inventory Categories</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {categoryError && <Alert variant="danger" dismissible onClose={() => setCategoryError('')}>{categoryError}</Alert>}
+            {categorySuccess && <Alert variant="success" dismissible onClose={() => setCategorySuccess('')}>{categorySuccess}</Alert>}
+            
+            <Form onSubmit={handleAddCategory} className="mb-4">
+              <h6>Add New Category</h6>
+              <Row className="g-2">
+                <Col md={5}>
+                  <Form.Control
+                    type="text"
+                    placeholder="Category name"
+                    value={newCategory.name}
+                    onChange={(e) => setNewCategory({ ...newCategory, name: e.target.value })}
+                    required
+                  />
+                </Col>
+                <Col md={5}>
+                  <Form.Control
+                    type="text"
+                    placeholder="Description (optional)"
+                    value={newCategory.description}
+                    onChange={(e) => setNewCategory({ ...newCategory, description: e.target.value })}
+                  />
+                </Col>
+                <Col md={2}>
+                  <Button type="submit" variant="primary" disabled={categoryLoading}>
+                    Add
+                  </Button>
+                </Col>
+              </Row>
+            </Form>
+
+            <hr />
+
+            <h6>Existing Categories</h6>
+            {categoryLoading && !inventoryCategories.length ? (
+              <div className="text-center py-3">
+                <Spinner animation="border" size="sm" />
+              </div>
+            ) : inventoryCategories.length === 0 ? (
+              <p className="text-muted">No categories yet. Add one above.</p>
+            ) : (
+              <Table hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryCategories.map(cat => (
+                    <tr key={cat.id}>
+                      <td>{cat.name}</td>
+                      <td>{cat.description || '-'}</td>
+                      <td>
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          className="me-2"
+                          onClick={() => handleEditCategory(cat)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => handleDeleteCategory(cat)}
+                        >
+                          Delete
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowCategoryModal(false)}>
+              Close
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Edit Category Modal */}
+        <Modal show={showEditCategoryModal} onHide={() => setShowEditCategoryModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Edit Category</Modal.Title>
+          </Modal.Header>
+          <Form onSubmit={handleUpdateCategory}>
+            <Modal.Body>
+              {categoryError && <Alert variant="danger">{categoryError}</Alert>}
+              <Form.Group className="mb-3">
+                <Form.Label>Category Name</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={editCategory.name}
+                  onChange={(e) => setEditCategory({ ...editCategory, name: e.target.value })}
+                  required
+                />
+              </Form.Group>
+              <Form.Group>
+                <Form.Label>Description</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={editCategory.description}
+                  onChange={(e) => setEditCategory({ ...editCategory, description: e.target.value })}
+                />
+              </Form.Group>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="secondary" onClick={() => setShowEditCategoryModal(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" disabled={categoryLoading}>
+                {categoryLoading ? 'Updating...' : 'Update'}
+              </Button>
+            </Modal.Footer>
+          </Form>
+        </Modal>
+
+        {/* Delete Category Confirmation Modal */}
+        <Modal show={showDeleteCategoryModal} onHide={() => setShowDeleteCategoryModal(false)}>
+          <Modal.Header closeButton>
+            <Modal.Title>Delete Category</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>Are you sure you want to delete the category <strong>"{categoryToDelete?.name}"</strong>?</p>
+            <p className="text-muted small">This will not delete products in this category, but the category will be removed from the dropdown.</p>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowDeleteCategoryModal(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={confirmDeleteCategory} disabled={categoryLoading}>
+              {categoryLoading ? 'Deleting...' : 'Delete'}
+            </Button>
           </Modal.Footer>
         </Modal>
       </Container>
