@@ -50,14 +50,17 @@ const AdminDashboard = () => {
 
   // For content padding with sidebar
   const contentStyle = {
-    marginLeft: '250px',
-    padding: '20px',
-    transition: 'all 0.3s'
+    marginLeft: '280px',
+    padding: '32px',
+    transition: 'all 0.3s',
+    minHeight: '100vh',
+    backgroundColor: '#f5f7fb'
   };
 
   // For mobile view
   const mobileContentStyle = {
-    padding: '20px'
+    padding: '24px',
+    backgroundColor: '#f5f7fb'
   };
 
   return (
