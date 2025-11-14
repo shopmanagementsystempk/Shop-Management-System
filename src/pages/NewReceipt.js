@@ -81,33 +81,6 @@ const NewReceipt = () => {
     }
   }, [currentUser]);
 
-  // Handle Enter key to save and print receipt
-  useEffect(() => {
-    const handleKeyPress = (e) => {
-      // Check if Enter key is pressed
-      if (e.key === 'Enter' && !loading && items.length > 0) {
-        // Check if the user is not typing in an input field
-        const activeElement = document.activeElement;
-        const isInputField = activeElement && (
-          activeElement.tagName === 'INPUT' || 
-          activeElement.tagName === 'SELECT' ||
-          activeElement.tagName === 'TEXTAREA'
-        );
-        
-        // If not in an input field, save and print the receipt
-        if (!isInputField) {
-          e.preventDefault();
-          handleSubmit(e);
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyPress);
-    return () => {
-      document.removeEventListener('keydown', handleKeyPress);
-    };
-  }, [loading, items, handleSubmit]);
-
   // Cleanup: Remove any print iframes when component unmounts
   useEffect(() => {
     return () => {
@@ -242,8 +215,7 @@ const NewReceipt = () => {
     }
   };
 
-  // Calculate totals
-  const calculateTotals = () => {
+  const totals = useMemo(() => {
     const totalQuantities = items.reduce((sum, item) => 
       sum + parseFloat(item.quantity || 0), 0);
     const totalAmount = items.reduce((sum, item) => 
@@ -262,9 +234,7 @@ const NewReceipt = () => {
       balance: balance.toFixed(2),
       return: balance < 0 ? Math.abs(balance).toFixed(2) : '0.00'
     };
-  };
-
-  const totals = useMemo(() => calculateTotals(), [items, discount, tax, enterAmount]);
+  }, [items, discount, tax, enterAmount]);
 
   // Handle item changes
   const handleItemChange = (index, field, value) => {
@@ -343,6 +313,163 @@ const NewReceipt = () => {
     setSuccess('');
     setSavedReceiptId(null);
   }, []);
+
+  const printReceipt = useCallback(() => {
+    const existingIframe = document.getElementById('print-iframe');
+    if (existingIframe) {
+      existingIframe.remove();
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-iframe';
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const currentDate = formatDisplayDate(new Date());
+    const currentTime = new Date().toLocaleTimeString();
+
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt - ${shopData?.shopName || 'Shop'}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            @media print { body { margin: 0; padding: 0; } }
+            body {
+              width: 80mm;
+              font-family: 'Courier New', monospace;
+              color: #000;
+              margin: 0 auto;
+              background: #fff;
+              padding: 6mm 4mm;
+              font-weight: 700;
+            }
+            .center { text-align: center; }
+            .header-logo { max-height: 36px; margin: 6px auto 8px; display: block; }
+            .shop-name { font-size: 20px; font-weight: 700; margin: 4px 0; }
+            .shop-address, .shop-phone { font-size: 12px; margin: 2px 0; }
+            .sep { border-top: 1px dotted #000; margin: 6px 0; }
+            .meta {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              font-size: 12px;
+              margin: 6px 0;
+            }
+            .meta div { padding: 2px 0; }
+            .meta-right { text-align: right; }
+            table.receipt { width: 100%; border-collapse: collapse; margin: 4px 0; }
+            table.receipt thead th { font-size: 12px; font-weight: 700; padding: 8px 4px; border-top: 1px dotted #000; border-bottom: 1px dotted #000; border-right: 1px dotted #000; }
+            table.receipt thead th:first-child { border-left: 1px dotted #000; }
+            table.receipt tbody td { font-size: 12px; padding: 8px 4px; border-bottom: 1px dotted #000; border-right: 1px dotted #000; vertical-align: top; }
+            table.receipt tbody tr td:first-child { border-left: 1px dotted #000; }
+            .c { text-align: center; }
+            .r { text-align: right; }
+            .wrap { white-space: pre-wrap; word-break: break-word; }
+            .totals { margin-top: 8px; border-top: 1px dotted #000; border-bottom: 1px dotted #000; padding: 6px 0; font-size: 12px; }
+            .line { display: flex; justify-content: space-between; margin: 3px 0; }
+            .net { text-align: right; font-weight: 700; font-size: 18px; margin-top: 6px; }
+            .thanks { text-align: center; margin-top: 12px; font-size: 12px; }
+            .dev {
+              text-align: center;
+              margin-top: 40px;
+              padding: 6px 0;
+              font-size: 10px;
+              border-top: 1px dashed #000;
+              border-bottom: 1px dashed #000;
+            }
+            col.sr { width: 12%; }
+            col.item { width: 46%; }
+            col.qty { width: 10%; }
+            col.rate { width: 16%; }
+            col.amnt { width: 16%; }
+          </style>
+        </head>
+        <body>
+          <div class="center">
+            ${shopData?.logoUrl ? `<img class="header-logo" src="${shopData.logoUrl}" alt="logo" onerror="this.style.display='none'" />` : ''}
+            <div class="shop-name">${shopData?.shopName || 'Shop Name'}</div>
+            ${shopData?.address ? `<div class="shop-address">${shopData.address}</div>` : ''}
+            <div class="shop-phone">Phone # ${shopData?.phoneNumbers?.[0] || shopData?.phoneNumber || ''}</div>
+          </div>
+
+          <div class="sep"></div>
+          <div class="meta">
+            <div>Invoice: ${transactionId}</div>
+            <div class="meta-right">${currentDate} ${currentTime}</div>
+          </div>
+          <div class="sep"></div>
+
+          <table class="receipt">
+            <colgroup>
+              <col class="sr" />
+              <col class="item" />
+              <col class="qty" />
+              <col class="rate" />
+              <col class="amnt" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th class="c">Sr</th>
+                <th class="c">Item / Product</th>
+                <th class="c">Qty</th>
+                <th class="r">Rate</th>
+                <th class="r">Amnt</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((item, idx) => {
+                const qty = parseFloat(item.quantity || 1);
+                const rate = Math.round(parseFloat(item.salePrice || 0));
+                const amount = Math.round(qty * rate);
+                const name = (item.name || '').replace(/\\n/g, '\n');
+                return `
+                  <tr>
+                    <td class="c">${idx + 1}</td>
+                    <td class="wrap">${name}</td>
+                    <td class="c">${qty}</td>
+                    <td class="r">${rate}</td>
+                    <td class="r">${amount}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <div class="totals">
+            <div class="line"><span>Total</span><span>${parseFloat(totals.totalQuantities).toFixed(2)}</span></div>
+            ${parseFloat(discount) > 0 ? `<div class="line"><span>Discount</span><span>${Math.round(parseFloat(discount))}</span></div>` : ''}
+            <div class="line"><span>Net Total</span><span>${Math.round(parseFloat(totals.payable))}</span></div>
+          </div>
+
+          <div class="net">${Math.round(parseFloat(totals.payable))}</div>
+          <div class="thanks">Thank you For Shoping !</div>
+          <div class="dev">software developed by SARMAD 03425050007</div>
+        </body>
+      </html>
+    `;
+
+    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(receiptHTML);
+    iframeDoc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+
+      setTimeout(() => {
+        if (iframe && iframe.parentNode) {
+          iframe.parentNode.removeChild(iframe);
+        }
+      }, 1000);
+    }, 250);
+  }, [discount, items, shopData, totals, transactionId]);
 
   // Handle form submission
   const handleSubmit = useCallback(async (e) => {
@@ -425,12 +552,37 @@ const NewReceipt = () => {
     discount,
     enterAmount,
     items,
+    printReceipt,
     resetForm,
     selectedEmployee,
     shopData,
     totals,
     transactionId
   ]);
+
+  // Handle Enter key to save and print receipt
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.key === 'Enter' && !loading && items.length > 0) {
+        const activeElement = document.activeElement;
+        const isInputField = activeElement && (
+          activeElement.tagName === 'INPUT' || 
+          activeElement.tagName === 'SELECT' ||
+          activeElement.tagName === 'TEXTAREA'
+        );
+
+        if (!isInputField) {
+          e.preventDefault();
+          handleSubmit(e);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyPress);
+    return () => {
+      document.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [loading, items, handleSubmit]);
 
   // Get product options for select
   const productOptions = stockLoaded ? 
@@ -440,169 +592,6 @@ const NewReceipt = () => {
   const employeeOptions = employeesLoaded ? 
     employees.map(emp => ({ value: emp.id, label: emp.name })) : [];
 
-  // Print the receipt
-  const printReceipt = () => {
-    // Remove any existing print iframe
-    const existingIframe = document.getElementById('print-iframe');
-    if (existingIframe) {
-      existingIframe.remove();
-    }
-    
-    // Create a hidden iframe for printing
-    const iframe = document.createElement('iframe');
-    iframe.id = 'print-iframe';
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    document.body.appendChild(iframe);
-    
-    const currentDate = formatDisplayDate(new Date());
-    const currentTime = new Date().toLocaleTimeString();
-    
-    const receiptHTML = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Receipt - ${shopData?.shopName || 'Shop'}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            @media print { body { margin: 0; padding: 0; } }
-            body {
-              width: 80mm;
-              font-family: 'Courier New', monospace;
-              color: #000;
-              margin: 0 auto;
-              background: #fff;
-              padding: 6mm 4mm;
-              font-weight: 700;
-            }
-            .center { text-align: center; }
-            .header-logo { max-height: 36px; margin: 6px auto 8px; display: block; }
-            .shop-name { font-size: 20px; font-weight: 700; margin: 4px 0; }
-            .shop-address, .shop-phone { font-size: 12px; margin: 2px 0; }
-            .sep { border-top: 1px dotted #000; margin: 6px 0; }
-            .meta {
-              display: grid;
-              grid-template-columns: 1fr 1fr;
-              font-size: 12px;
-              margin: 6px 0;
-            }
-            .meta div { padding: 2px 0; }
-            .meta-right { text-align: right; }
-            table.receipt { width: 100%; border-collapse: collapse; margin: 4px 0; }
-            table.receipt thead th { font-size: 12px; font-weight: 700; padding: 8px 4px; border-top: 1px dotted #000; border-bottom: 1px dotted #000; border-right: 1px dotted #000; }
-            table.receipt thead th:first-child { border-left: 1px dotted #000; }
-            table.receipt tbody td { font-size: 12px; padding: 8px 4px; border-bottom: 1px dotted #000; border-right: 1px dotted #000; vertical-align: top; }
-            table.receipt tbody tr td:first-child { border-left: 1px dotted #000; }
-            .c { text-align: center; }
-            .r { text-align: right; }
-            .wrap { white-space: pre-wrap; word-break: break-word; }
-            .totals { margin-top: 8px; border-top: 1px dotted #000; border-bottom: 1px dotted #000; padding: 6px 0; font-size: 12px; }
-            .line { display: flex; justify-content: space-between; margin: 3px 0; }
-            .net { text-align: right; font-weight: 700; font-size: 18px; margin-top: 6px; }
-            .thanks { text-align: center; margin-top: 12px; font-size: 12px; }
-            .dev {
-              text-align: center;
-              margin-top: 40px;
-              padding: 6px 0;
-              font-size: 10px;
-              border-top: 1px dashed #000;
-              border-bottom: 1px dashed #000;
-            }
-            /* Percentage widths for better layout on thermal printers */
-            col.sr { width: 12%; }
-            col.item { width: 46%; }
-            col.qty { width: 10%; }
-            col.rate { width: 16%; }
-            col.amnt { width: 16%; }
-          </style>
-        </head>
-        <body>
-          <div class="center">
-            ${shopData?.logoUrl ? `<img class="header-logo" src="${shopData.logoUrl}" alt="logo" onerror="this.style.display='none'" />` : ''}
-            <div class="shop-name">${shopData?.shopName || 'Shop Name'}</div>
-            ${shopData?.address ? `<div class="shop-address">${shopData.address}</div>` : ''}
-            <div class="shop-phone">Phone # ${shopData?.phoneNumbers?.[0] || shopData?.phoneNumber || ''}</div>
-          </div>
-
-          <div class="sep"></div>
-          <div class="meta">
-            <div>Invoice: ${transactionId}</div>
-            <div class="meta-right">${currentDate} ${currentTime}</div>
-          </div>
-          <div class="sep"></div>
-
-          <table class="receipt">
-            <colgroup>
-              <col class="sr" />
-              <col class="item" />
-              <col class="qty" />
-              <col class="rate" />
-              <col class="amnt" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th class="c">Sr</th>
-                <th class="c">Item / Product</th>
-                <th class="c">Qty</th>
-                <th class="r">Rate</th>
-                <th class="r">Amnt</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${items.map((item, idx) => {
-                const qty = parseFloat(item.quantity || 1);
-                const rate = Math.round(parseFloat(item.salePrice || 0));
-                const amount = Math.round(qty * rate);
-                const name = (item.name || '').replace(/\\n/g, '\n');
-                return `
-                  <tr>
-                    <td class="c">${idx + 1}</td>
-                    <td class="wrap">${name}</td>
-                    <td class="c">${qty}</td>
-                    <td class="r">${rate}</td>
-                    <td class="r">${amount}</td>
-                  </tr>
-                `;
-              }).join('')}
-            </tbody>
-          </table>
-
-          <div class="totals">
-            <div class="line"><span>Total</span><span>${parseFloat(totals.totalQuantities).toFixed(2)}</span></div>
-            ${parseFloat(discount) > 0 ? `<div class="line"><span>Discount</span><span>${Math.round(parseFloat(discount))}</span></div>` : ''}
-            <div class="line"><span>Net Total</span><span>${Math.round(parseFloat(totals.payable))}</span></div>
-          </div>
-
-          <div class="net">${Math.round(parseFloat(totals.payable))}</div>
-          <div class="thanks">Thank you For Shoping !</div>
-          <div class="dev">software developed by SARMAD 03425050007</div>
-        </body>
-      </html>
-    `;
-    
-    // Write content to iframe
-    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-    iframeDoc.open();
-    iframeDoc.write(receiptHTML);
-    iframeDoc.close();
-    
-    // Print and remove iframe after printing
-    setTimeout(() => {
-      iframe.contentWindow.focus();
-      iframe.contentWindow.print();
-      
-      // Remove iframe after printing completes
-      setTimeout(() => {
-        if (iframe && iframe.parentNode) {
-          iframe.parentNode.removeChild(iframe);
-        }
-      }, 1000);
-    }, 250);
-  };
 
   return (
     <>
