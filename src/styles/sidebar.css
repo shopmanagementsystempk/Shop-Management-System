@@ -141,6 +141,19 @@
   box-shadow: none;
 }
 
+.sidebar-submenu {
+  padding-left: 0;
+}
+
+.sidebar-sub-item {
+  padding-left: 3.5rem !important;
+  font-size: 0.9rem;
+}
+
+.sidebar-sub-item .sidebar-text {
+  font-size: 0.9rem;
+}
+
 .sidebar-footer {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   padding: 1.25rem 1.5rem 0;
