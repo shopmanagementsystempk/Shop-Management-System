@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Row, Col, Card, Form, Button, Table, InputGroup, Badge, Alert } from 'react-bootstrap';
 import BarcodeReader from 'react-barcode-reader';
@@ -106,7 +106,7 @@ const NewReceipt = () => {
     return () => {
       document.removeEventListener('keydown', handleKeyPress);
     };
-  }, [loading, items]);
+  }, [loading, items, handleSubmit]);
 
   // Cleanup: Remove any print iframes when component unmounts
   useEffect(() => {
@@ -264,7 +264,7 @@ const NewReceipt = () => {
     };
   };
 
-  const totals = calculateTotals();
+  const totals = useMemo(() => calculateTotals(), [items, discount, tax, enterAmount]);
 
   // Handle item changes
   const handleItemChange = (index, field, value) => {
@@ -329,8 +329,23 @@ const NewReceipt = () => {
     setItems(updated);
   };
 
+  // Reset form
+  const resetForm = useCallback(() => {
+    setItems([]);
+    setSelectedProduct('');
+    setProductCode('');
+    setCustomer('Walk-in Customer');
+    setDiscount('0');
+    setTax('0');
+    setEnterAmount('0');
+    setSelectedEmployee(null);
+    setError('');
+    setSuccess('');
+    setSavedReceiptId(null);
+  }, []);
+
   // Handle form submission
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -395,8 +410,8 @@ const NewReceipt = () => {
       }
         
       // Reset form after delay
-        setTimeout(() => {
-          resetForm();
+      setTimeout(() => {
+        resetForm();
       }, 5000);
       
     } catch (error) {
@@ -404,22 +419,18 @@ const NewReceipt = () => {
     } finally {
         setLoading(false);
     }
-  };
-
-  // Reset form
-  const resetForm = () => {
-    setItems([]);
-    setSelectedProduct('');
-    setProductCode('');
-    setCustomer('Walk-in Customer');
-    setDiscount('0');
-    setTax('0');
-    setEnterAmount('0');
-    setSelectedEmployee(null);
-    setError('');
-    setSuccess('');
-    setSavedReceiptId(null);
-  };
+  }, [
+    activeShopId,
+    autoPrint,
+    discount,
+    enterAmount,
+    items,
+    resetForm,
+    selectedEmployee,
+    shopData,
+    totals,
+    transactionId
+  ]);
 
   // Get product options for select
   const productOptions = stockLoaded ? 
@@ -511,9 +522,9 @@ const NewReceipt = () => {
         </head>
         <body>
           <div class="center">
-            ${shopData?.logoUrl ? `<img class=\"header-logo\" src=\"${shopData.logoUrl}\" alt=\"logo\" onerror=\"this.style.display='none'\" />` : ''}
+            ${shopData?.logoUrl ? `<img class="header-logo" src="${shopData.logoUrl}" alt="logo" onerror="this.style.display='none'" />` : ''}
             <div class="shop-name">${shopData?.shopName || 'Shop Name'}</div>
-            ${shopData?.address ? `<div class=\"shop-address\">${shopData.address}</div>` : ''}
+            ${shopData?.address ? `<div class="shop-address">${shopData.address}</div>` : ''}
             <div class="shop-phone">Phone # ${shopData?.phoneNumbers?.[0] || shopData?.phoneNumber || ''}</div>
           </div>
 
@@ -549,11 +560,11 @@ const NewReceipt = () => {
                 const name = (item.name || '').replace(/\\n/g, '\n');
                 return `
                   <tr>
-                    <td class=\"c\">${idx + 1}</td>
-                    <td class=\"wrap\">${name}</td>
-                    <td class=\"c\">${qty}</td>
-                    <td class=\"r\">${rate}</td>
-                    <td class=\"r\">${amount}</td>
+                    <td class="c">${idx + 1}</td>
+                    <td class="wrap">${name}</td>
+                    <td class="c">${qty}</td>
+                    <td class="r">${rate}</td>
+                    <td class="r">${amount}</td>
                   </tr>
                 `;
               }).join('')}
@@ -562,7 +573,7 @@ const NewReceipt = () => {
 
           <div class="totals">
             <div class="line"><span>Total</span><span>${parseFloat(totals.totalQuantities).toFixed(2)}</span></div>
-            ${parseFloat(discount) > 0 ? `<div class=\"line\"><span>Discount</span><span>${Math.round(parseFloat(discount))}</span></div>` : ''}
+            ${parseFloat(discount) > 0 ? `<div class="line"><span>Discount</span><span>${Math.round(parseFloat(discount))}</span></div>` : ''}
             <div class="line"><span>Net Total</span><span>${Math.round(parseFloat(totals.payable))}</span></div>
           </div>
 
