@@ -1,6 +1,6 @@
 import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase/config';
-import { addStockItem } from './stockUtils';
+import { addStockItem, addStockToItem } from './stockUtils';
 
 const purchaseCollection = 'purchaseOrders';
 
@@ -22,28 +22,60 @@ export const createPurchaseOrder = async (shopId, purchasePayload) => {
   const preparedItems = [];
 
   for (const item of items) {
+    const normalizedQuantity = normalizeNumber(item.quantity, 0);
+    const normalizedCostPrice =
+      item.costPrice !== undefined && item.costPrice !== '' ? normalizeNumber(item.costPrice, null) : null;
+
+    if (item.sourceItemId) {
+      try {
+        await addStockToItem(shopId, item.sourceItemId, normalizedQuantity, {
+          costPrice: normalizedCostPrice,
+          supplier: supplier?.trim() || item.supplier?.trim() || '',
+          reference: reference?.trim() || '',
+          purchaseDate: purchaseDate || new Date().toISOString(),
+          expiryDate: item.expiryDate || null
+        });
+
+        preparedItems.push({
+          ...item,
+          stockItemId: item.sourceItemId,
+          quantity: normalizedQuantity,
+          costPrice: normalizedCostPrice ?? 0,
+          sellingPrice:
+            item.sellingPrice !== undefined && item.sellingPrice !== '' ? normalizeNumber(item.sellingPrice, 0) : null,
+          unit: item.unit || 'units',
+          expiryDate: item.expiryDate || null,
+          existingItem: true
+        });
+        continue;
+      } catch (error) {
+        console.error('Failed to add stock to existing item, falling back to new item creation', error);
+      }
+    }
+
     const stockPayload = {
       name: item.name?.trim() || 'Unnamed Item',
       description: item.description?.trim() || '',
       category: item.category?.trim() || '',
       price: normalizeNumber(item.sellingPrice, 0),
-      quantity: normalizeNumber(item.quantity, 0),
+      quantity: normalizedQuantity,
       quantityUnit: item.unit || 'units',
-      costPrice: item.costPrice !== undefined && item.costPrice !== '' ? normalizeNumber(item.costPrice, null) : null,
+      costPrice: normalizedCostPrice,
       supplier: supplier?.trim() || item.supplier?.trim() || '',
       sku: item.sku?.trim() || '',
-      expiryDate: item.expiryDate || null,
+      expiryDate: item.expiryDate || null
     };
 
     const stockItemId = await addStockItem(shopId, stockPayload);
     preparedItems.push({
       ...item,
       stockItemId,
-      quantity: normalizeNumber(item.quantity, 0),
-      costPrice: normalizeNumber(item.costPrice, 0),
+      quantity: normalizedQuantity,
+      costPrice: normalizedCostPrice ?? 0,
       sellingPrice: item.sellingPrice !== undefined && item.sellingPrice !== '' ? normalizeNumber(item.sellingPrice, 0) : null,
       unit: item.unit || 'units',
       expiryDate: item.expiryDate || null,
+      existingItem: false
     });
   }
 
