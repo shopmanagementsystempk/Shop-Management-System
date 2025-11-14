@@ -2,16 +2,54 @@ import React, { useState } from 'react';
 import { Navbar, Nav, Container, Button, Offcanvas } from 'react-bootstrap';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAdmin } from '../contexts/AdminContext';
-import { useLanguage } from '../contexts/LanguageContext';
 import LanguageToggle from './LanguageToggle';
 import Translate from './Translate';
+import '../styles/sidebar.css';
+
+const navItems = [
+  {
+    path: '/admin/dashboard',
+    icon: 'dashboard',
+    label: <Translate textKey="dashboard" fallback="Dashboard" />
+  },
+  {
+    path: '/admin/pending-users',
+    icon: 'rule',
+    label: <Translate textKey="pendingApprovals" fallback="Pending Approvals" />
+  },
+  {
+    path: '/admin/users',
+    icon: 'supervisor_account',
+    label: <Translate textKey="manageUsers" fallback="Manage Users" />
+  }
+];
+
+const iconPalette = {
+  dashboard: {
+    background: 'linear-gradient(135deg, #1D976C 0%, #93F9B9 100%)',
+    color: '#0b1f4e'
+  },
+  rule: {
+    background: 'linear-gradient(135deg, #F2994A 0%, #F2C94C 100%)',
+    color: '#0b1f4e'
+  },
+  supervisor_account: {
+    background: 'linear-gradient(135deg, #1B74E4 0%, #54C6FF 100%)',
+    color: '#ffffff'
+  }
+};
+
+const defaultIconStyle = {
+  background: 'linear-gradient(135deg, #8E2DE2 0%, #4A00E0 100%)',
+  color: '#ffffff'
+};
 
 const AdminNavbar = () => {
   const { adminUser, adminLogout } = useAdmin();
   const navigate = useNavigate();
   const location = useLocation();
   const [showSidebar, setShowSidebar] = useState(false);
-  
+
   const handleClose = () => setShowSidebar(false);
   const handleShow = () => setShowSidebar(true);
 
@@ -24,115 +62,111 @@ const AdminNavbar = () => {
         console.error('Failed to log out', error);
       });
   };
-  
-  const isActive = (path) => {
-    return location.pathname === path;
+
+  const isActive = (path) => location.pathname === path;
+
+  const renderNavItem = (item, closeSidebar = false) => {
+    const iconStyle = iconPalette[item.icon] || defaultIconStyle;
+    return (
+      <Nav.Link
+        key={item.path}
+        as={Link}
+        to={item.path}
+        className={`sidebar-link ${isActive(item.path) ? 'active' : ''}`}
+        onClick={() => closeSidebar && handleClose()}
+      >
+        <span className="sidebar-icon" style={iconStyle}>
+          <span className="material-icons-outlined google-icon">{item.icon}</span>
+        </span>
+        <span className="sidebar-text">{item.label}</span>
+      </Nav.Link>
+    );
   };
+
+  const sidebarHeader = (
+    <div className="sidebar-top">
+      <Link to="/admin/dashboard" className="sidebar-logo text-decoration-none">
+        Admin Control Center
+      </Link>
+      {adminUser && (
+        <div className="sidebar-user-meta">
+          <div className="sidebar-user-name">{adminUser?.name || adminUser?.email}</div>
+          <div className="sidebar-user-role">
+            <i className="bi bi-shield-lock-fill"></i>
+            Super Admin
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const sidebarFooter = (closeSidebar = false) => (
+    <div className="sidebar-footer d-flex flex-column gap-2 px-3">
+      <LanguageToggle />
+      {adminUser && (
+        <Button
+          variant="outline-danger"
+          onClick={() => {
+            handleLogout();
+            if (closeSidebar) {
+              handleClose();
+            }
+          }}
+        >
+          <Translate textKey="logout" />
+        </Button>
+      )}
+    </div>
+  );
 
   return (
     <>
-      <Navbar bg="dark" variant="dark" expand="lg" className="mb-4">
-        <Container fluid>
-          <Navbar.Brand as={Link} to="/admin/dashboard">
-            Golden Oil Admin
-          </Navbar.Brand>
-          
-          <Button 
-            variant="outline-light" 
-            className="d-lg-none"
-            onClick={handleShow}
-          >
-            <i className="bi bi-list"></i> <Translate textKey="menu" fallback="Menu" />
+      {/* Mobile top bar */}
+      <Navbar bg="primary" variant="dark" className="mb-3 d-lg-none shadow-sm">
+        <Container fluid className="d-flex justify-content-between align-items-center">
+          <Button variant="outline-light" onClick={handleShow}>
+            <i className="bi bi-list"></i>
           </Button>
-          
-          <div className="d-none d-lg-flex align-items-center">
+          <Navbar.Brand as={Link} to="/admin/dashboard" className="fw-bold text-uppercase">
+            Admin Portal
+          </Navbar.Brand>
+          <div className="d-flex align-items-center gap-2">
             <LanguageToggle />
-            {adminUser && (
-              <Button variant="outline-light" onClick={handleLogout} className="ms-2">
-                <Translate textKey="logout" />
-              </Button>
-            )}
           </div>
         </Container>
       </Navbar>
-      
-      {/* Sidebar for mobile view */}
-      <Offcanvas show={showSidebar} onHide={handleClose} className="bg-dark text-white" placement="start">
+
+      {/* Mobile sidebar */}
+      <Offcanvas
+        show={showSidebar}
+        onHide={handleClose}
+        className="app-mobile-sidebar"
+        placement="start"
+      >
         <Offcanvas.Header closeButton closeVariant="white">
-          <Offcanvas.Title><Translate textKey="adminPanel" fallback="Admin Panel" /></Offcanvas.Title>
+          <Offcanvas.Title>
+            <Translate textKey="adminPanel" fallback="Admin Panel" />
+          </Offcanvas.Title>
         </Offcanvas.Header>
         <Offcanvas.Body>
-          <Nav className="flex-column">
-            <Nav.Link 
-              as={Link} 
-              to="/admin/dashboard" 
-              className={isActive('/admin/dashboard') ? 'active' : ''}
-              onClick={handleClose}
-            >
-              <Translate textKey="dashboard" />
-            </Nav.Link>
-            <Nav.Link 
-              as={Link} 
-              to="/admin/pending-users" 
-              className={isActive('/admin/pending-users') ? 'active' : ''}
-              onClick={handleClose}
-            >
-              <Translate textKey="pendingApprovals" fallback="Pending Approvals" />
-            </Nav.Link>
-            <Nav.Link 
-              as={Link} 
-              to="/admin/users" 
-              className={isActive('/admin/users') ? 'active' : ''}
-              onClick={handleClose}
-            >
-              <Translate textKey="manageUsers" fallback="Manage Users" />
-            </Nav.Link>
-            <hr className="bg-secondary" />
-            <div className="d-flex mt-3">
-              <LanguageToggle />
-              <Button 
-                variant="outline-danger" 
-                onClick={() => {
-                  handleLogout();
-                  handleClose();
-                }}
-                className="ms-2"
-              >
-                <Translate textKey="logout" />
-              </Button>
-            </div>
+          {sidebarHeader}
+          <Nav className="flex-column sidebar-nav">
+            {navItems.map(item => renderNavItem(item, true))}
           </Nav>
+          {sidebarFooter(true)}
         </Offcanvas.Body>
       </Offcanvas>
-      
-      {/* Sidebar for desktop */}
-      <div className="d-none d-lg-block" style={{ width: '250px', position: 'fixed', top: '70px', bottom: 0, left: 0, zIndex: 100, padding: '20px 0', boxShadow: '0 4px 12px 0 rgba(0,0,0,.05)', backgroundColor: '#f8f9fa' }}>
-        <Nav className="flex-column px-3">
-          <Nav.Link 
-            as={Link} 
-            to="/admin/dashboard" 
-            className={`rounded py-2 ${isActive('/admin/dashboard') ? 'active bg-primary text-white' : ''}`}
-          >
-            <i className="bi bi-speedometer2 me-2"></i> <Translate textKey="dashboard" />
-          </Nav.Link>
-          <Nav.Link 
-            as={Link} 
-            to="/admin/pending-users" 
-            className={`rounded py-2 ${isActive('/admin/pending-users') ? 'active bg-primary text-white' : ''}`}
-          >
-            <i className="bi bi-person-plus me-2"></i> <Translate textKey="pendingApprovals" fallback="Pending Approvals" />
-          </Nav.Link>
-          <Nav.Link 
-            as={Link} 
-            to="/admin/users" 
-            className={`rounded py-2 ${isActive('/admin/users') ? 'active bg-primary text-white' : ''}`}
-          >
-            <i className="bi bi-people me-2"></i> <Translate textKey="manageUsers" fallback="Manage Users" />
-          </Nav.Link>
+
+      {/* Desktop sidebar */}
+      <div className="app-sidebar d-none d-lg-flex flex-column">
+        {sidebarHeader}
+        <Nav className="flex-column sidebar-nav flex-grow-1">
+          {navItems.map(renderNavItem)}
         </Nav>
+        {sidebarFooter()}
       </div>
     </>
   );
 };
 
-export default AdminNavbar; 
+export default AdminNavbar;
