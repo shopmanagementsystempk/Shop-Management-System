@@ -7,9 +7,6 @@
         "installCommand": "npm install --legacy-peer-deps",
         "buildCommand": "CI=false react-scripts build",
         "distDir": "build"
-      },
-      "env": {
-        "CI": "false"
       }
     }
   ],
