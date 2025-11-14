@@ -23,8 +23,6 @@ const NewReceipt = () => {
   const [productCode, setProductCode] = useState('');
   const [customer, setCustomer] = useState('Walk-in Customer');
   const [autoPrint, setAutoPrint] = useState(true);
-  const [saleReturn, setSaleReturn] = useState(false);
-  const [isWholesale, setIsWholesale] = useState(false);
   const [discount, setDiscount] = useState('0');
   const [tax, setTax] = useState('0');
   const [enterAmount, setEnterAmount] = useState('0');
@@ -711,20 +709,6 @@ const NewReceipt = () => {
                     label="Auto Print"
                     checked={autoPrint}
                     onChange={(e) => setAutoPrint(e.target.checked)}
-                  />
-                  <Form.Check
-                    type="checkbox"
-                    id="saleReturn"
-                    label="Sale Return"
-                    checked={saleReturn}
-                    onChange={(e) => setSaleReturn(e.target.checked)}
-                  />
-                  <Form.Check
-                    type="checkbox"
-                    id="wholesale"
-                    label="Wholesale"
-                    checked={isWholesale}
-                    onChange={(e) => setIsWholesale(e.target.checked)}
                   />
                 </div>
               </Card.Body>
