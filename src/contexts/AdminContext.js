@@ -1,23 +1,29 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
+import {
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  getAuth
 } from 'firebase/auth';
-import { 
-  doc, 
-  getDoc, 
-  getDocs, 
-  collection, 
-  query, 
-  where, 
+import {
+  doc,
+  getDoc,
+  getDocs,
+  collection,
+  query,
+  where,
   updateDoc,
-  orderBy
+  orderBy,
+  setDoc
 } from 'firebase/firestore';
-import { auth, db } from '../firebase/config';
+import { initializeApp, getApps } from 'firebase/app';
+import { auth, db, firebaseConfig } from '../firebase/config';
+import { validatePassword } from '../utils/passwordPolicy';
 
 // Admin email from environment variables
 const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
+const SECONDARY_APP_NAME = 'admin-secondary-app';
 
 // In a production environment, admin users should be managed through Firebase Authentication
 // with custom claims or a separate admin collection in Firestore
@@ -236,6 +242,70 @@ export function AdminProvider({ children }) {
     }
   }
 
+  // Create a new shop account directly from admin panel
+  async function createShopAccount({
+    shopName,
+    email,
+    password,
+    phoneNumber = '',
+    address = '',
+    status = 'approved'
+  }) {
+    if (!shopName || !email || !password) {
+      throw new Error('Shop name, email, and password are required');
+    }
+
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      throw new Error(passwordValidation.message);
+    }
+
+    const existing = await getDocs(query(collection(db, 'shops'), where('userEmail', '==', email)));
+    if (!existing.empty) {
+      throw new Error('An account with this email already exists');
+    }
+
+    const normalizedStatus = ['approved', 'pending', 'frozen', 'rejected'].includes(status)
+      ? status
+      : 'approved';
+
+    const secondaryApp =
+      getApps().find(app => app.name === SECONDARY_APP_NAME) ||
+      initializeApp(firebaseConfig, SECONDARY_APP_NAME);
+    const secondaryAuth = getAuth(secondaryApp);
+    const timestamp = new Date().toISOString();
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      const user = userCredential.user;
+
+      await setDoc(doc(db, 'shops', user.uid), {
+        shopName,
+        userEmail: email,
+        phoneNumber: phoneNumber || '',
+        address: address || '',
+        status: normalizedStatus,
+        accountStatus: normalizedStatus === 'approved' ? 'active' : normalizedStatus,
+        createdAt: timestamp,
+        approvedAt: normalizedStatus === 'approved' ? timestamp : null,
+        createdViaAdmin: true,
+        createdByAdminId: adminUser?.uid || null,
+        createdByAdminEmail: adminUser?.email || ADMIN_EMAIL || null
+      });
+
+      return { success: true, userId: user.uid };
+    } catch (error) {
+      console.error('Error creating shop account:', error);
+      throw error;
+    } finally {
+      try {
+        await signOut(secondaryAuth);
+      } catch (logoutError) {
+        // Ignore logout errors for secondary auth
+      }
+    }
+  }
+
   // Approve user registration
   async function approveUser(userId) {
     try {
@@ -356,6 +426,7 @@ export function AdminProvider({ children }) {
     adminLogout,
     getPendingUsers,
     getAllUsers,
+    createShopAccount,
     approveUser,
     rejectUser,
     toggleUserFreeze,
