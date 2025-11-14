@@ -248,7 +248,7 @@ const Login = () => {
           <Card className="shadow-sm border-0">
             <Card.Body className="p-5">
               <div className="text-center mb-4">
-                <h2 className="mb-3">Shop Billing System</h2>
+                <h2 className="mb-3">Point of Sale</h2>
                 <p className="text-muted">Please sign in to continue</p>
               </div>
               
