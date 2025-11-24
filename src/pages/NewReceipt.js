@@ -601,9 +601,11 @@ const NewReceipt = () => {
   }, [
     activeShopId,
     autoPrint,
+    customer,
     discount,
     enterAmount,
     items,
+    loanAmount,
     printReceipt,
     resetForm,
     selectedEmployee,
