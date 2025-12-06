@@ -20,6 +20,7 @@ const AddStockItem = () => {
   const [sku, setSku] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [lowStockAlert, setLowStockAlert] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
@@ -158,6 +159,12 @@ const AddStockItem = () => {
       return;
     }
     
+    if (lowStockAlert && (isNaN(parseFloat(lowStockAlert)) || parseFloat(lowStockAlert) < 0)) {
+      setError('Low stock alert must be a valid number');
+      setLoading(false);
+      return;
+    }
+    
     // Create stock item data
     const itemData = {
       name: name.trim(),
@@ -170,7 +177,8 @@ const AddStockItem = () => {
       supplier: supplier.trim(),
       sku: sku.trim(),
       expiryDate: expiryDate || null,
-      purchaseDate: purchaseDate || new Date().toISOString()
+      purchaseDate: purchaseDate || new Date().toISOString(),
+      lowStockAlert: lowStockAlert ? parseFloat(lowStockAlert) : null // Include low stock alert
     };
     
     // Save to Firestore
@@ -382,6 +390,22 @@ const AddStockItem = () => {
                       value={purchaseDate}
                       onChange={(e) => setPurchaseDate(e.target.value)}
                     />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Low Stock Alert (Optional)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={lowStockAlert}
+                      onChange={(e) => setLowStockAlert(e.target.value)}
+                      placeholder="Minimum quantity"
+                    />
+                    <Form.Text className="text-muted">
+                      Alert when stock falls below this quantity
+                    </Form.Text>
                   </Form.Group>
                 </Col>
               </Row>
