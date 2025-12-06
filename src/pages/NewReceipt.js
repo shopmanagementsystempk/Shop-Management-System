@@ -141,6 +141,7 @@ const NewReceipt = () => {
           salePrice: matchingItem.price.toString(),
           tax: '0',
           quantity: '1',
+          itemPrice: '', // Price field for quantity calculation
           total: matchingItem.price.toString(),
           costPrice: matchingItem.costPrice ? matchingItem.costPrice.toString() : '0',
           quantityUnit: matchingItem.quantityUnit || 'units',
@@ -182,6 +183,7 @@ const NewReceipt = () => {
           salePrice: matchingItem.price.toString(),
           tax: '0',
           quantity: '1',
+          itemPrice: '', // Price field for quantity calculation
           total: matchingItem.price.toString(),
           costPrice: matchingItem.costPrice ? matchingItem.costPrice.toString() : '0',
           quantityUnit: matchingItem.quantityUnit || 'units',
@@ -224,6 +226,7 @@ const NewReceipt = () => {
             salePrice: matchingItem.price.toString(),
             tax: '0',
             quantity: '1',
+            itemPrice: '', // Price field for quantity calculation
             total: matchingItem.price.toString(),
             costPrice: matchingItem.costPrice ? matchingItem.costPrice.toString() : '0',
             quantityUnit: matchingItem.quantityUnit || 'units',
@@ -272,11 +275,32 @@ const NewReceipt = () => {
     const newItems = [...items];
     newItems[index][field] = value;
     
-    // Recalculate total for this item
-    if (field === 'quantity' || field === 'salePrice') {
+    // If price field is entered, calculate quantity based on price / unit price
+    if (field === 'itemPrice') {
+      const itemPrice = value === '' ? 0 : parseFloat(value || 0);
+      const unitPrice = parseFloat(newItems[index].salePrice || 0);
+      
+      if (itemPrice > 0 && unitPrice > 0) {
+        // Calculate quantity: quantity = price / unit price
+        const calculatedQuantity = (itemPrice / unitPrice).toFixed(4);
+        newItems[index].quantity = calculatedQuantity;
+        newItems[index].total = itemPrice.toFixed(2);
+      } else {
+        // If price is cleared, recalculate total based on quantity
+        const quantity = parseFloat(newItems[index].quantity || 1);
+        const price = parseFloat(newItems[index].salePrice || 0);
+        newItems[index].total = (quantity * price).toFixed(2);
+      }
+    }
+    // Recalculate total for this item when quantity or salePrice changes
+    else if (field === 'quantity' || field === 'salePrice') {
       const quantity = parseFloat(newItems[index].quantity || 1);
       const price = parseFloat(newItems[index].salePrice || 0);
-      newItems[index].total = (quantity * price).toFixed(2);
+      const newTotal = (quantity * price).toFixed(2);
+      newItems[index].total = newTotal;
+      
+      // Update itemPrice to match the new total to keep fields in sync
+      newItems[index].itemPrice = newTotal;
     }
     
     setItems(newItems);
@@ -313,6 +337,7 @@ const NewReceipt = () => {
         salePrice: matchingItem.price.toString(),
         tax: '0',
         quantity: '1',
+        itemPrice: '', // Price field for quantity calculation
         total: matchingItem.price.toString(),
         costPrice: matchingItem.costPrice ? matchingItem.costPrice.toString() : '0',
         quantityUnit: matchingItem.quantityUnit || 'units',
@@ -601,11 +626,9 @@ const NewReceipt = () => {
   }, [
     activeShopId,
     autoPrint,
-    customer,
     discount,
     enterAmount,
     items,
-    loanAmount,
     printReceipt,
     resetForm,
     selectedEmployee,
@@ -804,7 +827,8 @@ const NewReceipt = () => {
                           <th>#</th>
                           <th>Product</th>
                           <th>Stock</th>
-                          <th>Price</th>
+                          <th>Unit Price</th>
+                          <th>Price (RS)</th>
                           <th>Qty</th>
                           <th>Total</th>
                           <th>Action</th>
@@ -831,7 +855,22 @@ const NewReceipt = () => {
                                 size="sm"
                                 style={{ width: '100px' }}
                                 value={item.salePrice}
-                                onChange={(e) => handleItemChange(index, 'salePrice', e.target.value)}
+                                readOnly
+                                title="Unit price per {item.quantityUnit || 'unit'} (read-only)"
+                                className="bg-light"
+                              />
+                            </td>
+                            <td>
+                              <Form.Control
+                                type="number"
+                                size="sm"
+                                style={{ width: '100px' }}
+                                value={item.itemPrice || ''}
+                                onChange={(e) => handleItemChange(index, 'itemPrice', e.target.value)}
+                                placeholder="Enter price"
+                                step="0.01"
+                                min="0"
+                                title="Enter price to calculate quantity automatically"
                               />
                             </td>
                             <td>
@@ -841,7 +880,9 @@ const NewReceipt = () => {
                                 style={{ width: '80px' }}
                                 value={item.quantity}
                                 onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                                min="1"
+                                min="0"
+                                step={item.quantityUnit === 'kg' ? '0.001' : '1'}
+                                title="Quantity in {item.quantityUnit || 'units'}"
                               />
                             </td>
                             <td>
