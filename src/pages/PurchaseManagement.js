@@ -20,7 +20,8 @@ const defaultRow = {
   costPrice: '',
   sellingPrice: '',
   expiryDate: '',
-  barcode: ''
+  barcode: '',
+  lowStockAlert: ''
 };
 const createEmptyRow = () => ({ ...defaultRow });
 
@@ -316,7 +317,11 @@ const PurchaseManagement = () => {
           selectedItem.price !== undefined && selectedItem.price !== null
             ? selectedItem.price
             : next[index].sellingPrice,
-        barcode: selectedItem.barcode || ''
+        barcode: selectedItem.barcode || '',
+        lowStockAlert:
+          selectedItem.lowStockAlert !== undefined && selectedItem.lowStockAlert !== null
+            ? selectedItem.lowStockAlert.toString()
+            : next[index].lowStockAlert
       };
 
       return next;
@@ -339,7 +344,8 @@ const PurchaseManagement = () => {
       costPrice: parseFloat(row.costPrice || 0),
       sellingPrice: row.sellingPrice ? parseFloat(row.sellingPrice) : null,
       expiryDate: row.expiryDate || null,
-      sku: (row.barcode || '').trim()
+      sku: (row.barcode || '').trim(),
+      lowStockAlert: row.lowStockAlert ? parseFloat(row.lowStockAlert) : null
     }));
   };
 
@@ -746,6 +752,24 @@ const PurchaseManagement = () => {
                           <Form.Group>
                             <Form.Label>Expiry Date (Optional)</Form.Label>
                             <Form.Control type="date" value={row.expiryDate || ''} onChange={(e) => setRowValue(idx, 'expiryDate', e.target.value)} />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                      <Row className="g-3 mt-1">
+                        <Col md={3}>
+                          <Form.Group>
+                            <Form.Label>Low Stock Alert (Optional)</Form.Label>
+                            <Form.Control 
+                              type="number" 
+                              min="0" 
+                              step="0.01" 
+                              value={row.lowStockAlert || ''} 
+                              onChange={(e) => setRowValue(idx, 'lowStockAlert', e.target.value)} 
+                              placeholder="Minimum quantity"
+                            />
+                            <Form.Text className="text-muted">
+                              Alert when stock falls below this quantity
+                            </Form.Text>
                           </Form.Group>
                         </Col>
                       </Row>
